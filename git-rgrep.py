@@ -7,12 +7,12 @@ import subprocess
 import sys
 from typing import Iterator, Optional
 
-check_git_repo = """git -C "{}" rev-parse"""
 
 
 def is_git_repo(d: Path):
     assert d.is_dir(), "path is a directory"
-    cmd = shlex.split(check_git_repo.format(d))
+
+    cmd = ["git", "-C", shlex.quote(str(d)), "rev-parse"]
     p = subprocess.run(cmd,
                        stderr=subprocess.DEVNULL,
                        stdout=subprocess.DEVNULL)
@@ -39,7 +39,7 @@ COLOR_RESET = "\033[0m"
 
 
 def git_grep(repo: Path, args: list[str]) -> Optional[Iterator[str]]:
-    command = ["git", "-C", f"{repo}", "grep"]
+    command = ["git", "-C", shlex.quote(str(repo)), "grep"]
     command.extend(args)
 
     p = subprocess.run(command, capture_output=True)
