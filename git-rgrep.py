@@ -7,6 +7,8 @@ import subprocess
 import sys
 from typing import Iterator, Optional
 
+# Convenience git grep args to use
+DEFAULT_GIT_GREP_ARGS = ["-n"]
 
 
 def is_git_repo(d: Path):
@@ -61,13 +63,25 @@ def main() -> int:
     parser.add_argument("-x", "--exclude", metavar="pattern", default=[],
                         action="extend", type=str, nargs=1,
                         help="convenience for git grep's exclude files")
-    parser.add_argument("git_grep_args",
-                        metavar="arg", default=[],
-                        nargs="*", help="passthru args to git grep")
-    args = parser.parse_args()
+    parser.add_argument("--no-defaults", dest="use_defaults",
+                        action="store_false",
+                        help=f"use default git args: {shlex.join(DEFAULT_GIT_GREP_ARGS)}")
 
-    git_grep_args = ["-n"]
-    git_grep_args.extend(args.git_grep_args)
+    parser.usage = f"{parser.format_usage().rstrip()} [--] [git grep args ...]"
+
+    args, git_grep_args = parser.parse_known_args()
+
+    # Remove "--" separator if used for disambiguating our args and those to git grep
+    try:
+        if "--" == git_grep_args[0]:
+            git_grep_args.pop(0)
+    except IndexError:
+        pass
+
+    # @Robustness: Maybe inserting at the start isn't always correct
+    if args.use_defaults:
+        for idx, arg in enumerate(DEFAULT_GIT_GREP_ARGS):
+            git_grep_args.insert(idx, arg)
 
     if "--color=never" in git_grep_args or \
             (not sys.stdout.isatty() and "--color=always" in git_grep_args):
