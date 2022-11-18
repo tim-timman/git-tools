@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import re
 from pathlib import Path
 import shlex
 import subprocess
@@ -104,6 +105,13 @@ def main() -> int:
     try:
         for d in find_git_repos(Path.cwd()):
             if any(d.is_relative_to(x_dir) for x_dir in args.exclude_dir):
+                continue
+
+            # @Robustness: this matching is a bit naive. But we want simple
+            # exclude filters to work on repo names too since we print them.
+            # Makes it more intuitive.
+            rel_repo_path = str(d.relative_to(Path.cwd()))
+            if any(re.search(pattern, rel_repo_path) for pattern in args.exclude):
                 continue
 
             try:
