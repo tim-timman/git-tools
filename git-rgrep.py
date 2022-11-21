@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
+from __future__ import annotations
+
 import argparse
-import re
 from pathlib import Path
+import re
 import shlex
 import subprocess
 import sys
@@ -41,14 +43,13 @@ COLOR_GREEN = "\033[32m"
 COLOR_RESET = "\033[0m"
 
 
-def git_grep(repo: Path, args: list[str]) -> Optional[Iterator[str]]:
+def git_grep(repo: Path, args: list[str]) -> Optional[list[bytes]]:
     command = ["git", "-C", shlex.quote(str(repo)), "grep"]
     command.extend(args)
 
     p = subprocess.run(command, capture_output=True)
     if p.returncode == 0:
-        repo_path = repo.relative_to(Path.cwd())
-        return (f"{COLOR_GREEN}{repo_path}{COLOR_RESET}/{line}" for line in p.stdout.decode().splitlines())
+        return p.stdout.splitlines(keepends=True)
     elif p.returncode == 1:
         # No match
         return None
@@ -86,12 +87,10 @@ def main() -> int:
 
     if "--color=never" in git_grep_args or \
             (not sys.stdout.isatty() and "--color=always" in git_grep_args):
-        # HACK: just noop our global color codes
-        for k in g:
-            if k.startswith("COLOR_"):
-                g[k] = ""
+        use_color = False
     else:
         git_grep_args.insert(0, "--color=always")
+        use_color = True
 
     if args.exclude:
         git_excludes = [f":!{x}" for x in args.exclude]
@@ -120,8 +119,19 @@ def main() -> int:
                 print(f"ERROR: {e}", file=sys.stderr)
                 return 1
             else:
-                if results is not None:
-                    print(*results, sep="\n")
+                if results is None:
+                    continue
+
+                repo_path = d.relative_to(Path.cwd())
+                if use_color:
+                    repo_prefix = f"{COLOR_GREEN}{repo_path!s}{COLOR_RESET}/".encode()
+                else:
+                    repo_prefix = f"{repo_path!s}/".encode()
+
+                for result in results:
+                    sys.stdout.buffer.write(repo_prefix)
+                    sys.stdout.buffer.write(result)
+
     except KeyboardInterrupt:
         print("Caught Ctrl-C, exiting.", file=sys.stderr)
         return 2
