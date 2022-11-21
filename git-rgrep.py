@@ -60,9 +60,9 @@ def git_grep(repo: Path, args: list[str]) -> Optional[list[bytes]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exclude-dir", type=Path, action="extend",
-                        metavar="PATH", nargs="+", default=[],
-                        help="repos directories to exclude")
+    parser.add_argument("-X", "--exclude-repo", metavar="pattern",  default=[],
+                        action="extend", type=str, nargs=1,
+                        help="glob pattern of repos to exclude")
     parser.add_argument("-x", "--exclude", metavar="pattern", default=[],
                         action="extend", type=str, nargs=1,
                         help="convenience for git grep's exclude files")
@@ -104,14 +104,7 @@ def main() -> int:
 
     try:
         for d in find_git_repos(Path.cwd()):
-            if any(d.is_relative_to(x_dir) for x_dir in args.exclude_dir):
-                continue
-
-            # @Robustness: this matching is a bit naive. But we want simple
-            # exclude filters to work on repo names too since we print them.
-            # Makes it more intuitive.
-            rel_repo_path = str(d.relative_to(Path.cwd()))
-            if any(re.search(pattern, rel_repo_path) for pattern in args.exclude):
+            if any(d.match(pattern) for pattern in args.exclude_repo):
                 continue
 
             try:
