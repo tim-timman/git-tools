@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import re
 import shlex
@@ -128,9 +129,15 @@ def main() -> int:
                 else:
                     repo_prefix = f"{repo_path!s}/".encode()
 
-                for result in results:
-                    sys.stdout.buffer.write(repo_prefix)
-                    sys.stdout.buffer.write(result)
+                try:
+                    for result in results:
+                        sys.stdout.buffer.write(repo_prefix)
+                        sys.stdout.buffer.write(result)
+                    sys.stdout.flush()
+                except BrokenPipeError:
+                    devnull = os.open(os.devnull, os.O_WRONLY)
+                    os.dup2(devnull, sys.stdout.fileno())
+                    raise SystemExit(1)
 
     except KeyboardInterrupt:
         print("Caught Ctrl-C, exiting.", file=sys.stderr)
