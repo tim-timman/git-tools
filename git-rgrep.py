@@ -11,6 +11,10 @@ import subprocess
 import sys
 from typing import Iterator, Optional
 
+if sys.version_info <= (3, 9):
+    print("ERROR: Requires Python 3.9 or higher", file=sys.stderr)
+    raise SystemExit(1)
+
 # Convenience git grep args to use
 DEFAULT_GIT_GREP_ARGS = ["-n"]
 
