@@ -64,17 +64,17 @@ def git_grep(repo: Path, args: list[str]) -> Optional[list[bytes]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("-X", "--exclude-repo", metavar="pattern",  default=[],
+    parser.add_argument("-X", "--exclude-repo", metavar="PATTERN",  default=[],
                         action="extend", type=str, nargs=1,
                         help="glob pattern of repos to exclude")
-    parser.add_argument("-x", "--exclude", metavar="pattern", default=[],
+    parser.add_argument("-x", "--exclude", metavar="PATTERN", default=[],
                         action="extend", type=str, nargs=1,
                         help="convenience for git grep's exclude files")
     parser.add_argument("--no-defaults", dest="use_defaults",
                         action="store_false",
-                        help=f"use default git args: {shlex.join(DEFAULT_GIT_GREP_ARGS)}")
+                        help=f"don't use default git args: {shlex.join(DEFAULT_GIT_GREP_ARGS)}")
 
-    parser.usage = f"{parser.format_usage().rstrip()} [--] [git grep args ...]"
+    parser.usage = f"{parser.format_usage()[7:].rstrip()} [--] [git grep args ...]"
 
     args, git_grep_args = parser.parse_known_args()
 
