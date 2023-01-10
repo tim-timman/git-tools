@@ -118,6 +118,8 @@ def main() -> int:
     parser.add_argument("-X", "--exclude-repo", metavar="PATTERN",  default=[],
                         action="extend", type=str, nargs=1,
                         help="glob pattern of repos to exclude")
+    parser.add_argument("-C", "--cwd", type=Path, default=Path.cwd(), metavar="PATH",
+                        help="change current working directory")
     parser.add_argument("--list-repos", action="store_true",
                         help="just list repos and exit (for piping)")
     parser.add_argument("--prefix", choices=("repo", "line", "no"),
@@ -134,10 +136,14 @@ def main() -> int:
 
     args, git_args = parser.parse_known_args()
 
+    if not args.cwd.is_absolute():
+        args.cwd = args.cwd.absolute()
+
+    repos = [d for d in find_git_repos(args.cwd)
+             if not any(d.match(pattern) for pattern in args.exclude_repo)]
+
     if args.list_repos:
-        for d in find_git_repos(Path.cwd()):
-            if any(d.match(pattern) for pattern in args.exclude_repo):
-                continue
+        for d in repos:
             print(d)
         return 0
 
@@ -161,9 +167,6 @@ def main() -> int:
     git_command = args.func(args, git_args)
 
     try:
-        repos = [d for d in find_git_repos(Path.cwd())
-                 if not any(d.match(pattern) for pattern in args.exclude_repo)]
-
         with ThreadPoolExecutor() as ex:
             future_to_repo = {ex.submit(git_command, d): d for d in repos}
 
@@ -177,7 +180,7 @@ def main() -> int:
                 if results is None:
                     continue
 
-                repo_path = repo.relative_to(Path.cwd())
+                repo_path = repo.relative_to(args.cwd)
 
                 if args.use_color:
                     repo_prefix = f"{COLOR_GREEN}{repo_path!s}{COLOR_RESET}/".encode()
