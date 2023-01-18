@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import functools
 from concurrent.futures import as_completed, ThreadPoolExecutor
 import os
 from pathlib import Path
@@ -103,10 +102,17 @@ def default_command(args, git_args):
 
 def run_git(command: list[str], *,
             ok_returncodes: tuple[int] = (0,),
-            ignore_returncodes: tuple[int] = ()) -> Optional[list[bytes]]:
+            ignore_returncodes: tuple[int] = ()) -> Optional[tuple[list[bytes], list[bytes]]]:
+    # @TODO: if we're run in a tty, attach stdout and stderr to pty's to not
+    # change behavior of program thinking it's writing to a pipe (which it is).
+    # Git stops outputting progress information to stderr for a lot of commands
+    # that we want to capture.
+    # See https://stackoverflow.com/questions/52954248/capture-output-as-a-tty-in-python
+    # Update: Git seems to think it's not a fully functional tty and asks for input
+    # hence hanging the pipe.
     p = subprocess.run(command, capture_output=True)
     if p.returncode in ok_returncodes:
-        return p.stdout.splitlines(keepends=True)
+        return p.stdout.splitlines(keepends=True), p.stderr.splitlines(keepends=True)
     elif p.returncode in ignore_returncodes:
         return None
     else:
@@ -177,6 +183,7 @@ def main() -> int:
                 except GitError as e:
                     print(f"ERROR: in repo {repo}:\n{e}", file=sys.stderr)
                     return 1
+
                 if results is None:
                     continue
 
@@ -191,16 +198,17 @@ def main() -> int:
                 if prefix == "repo":
                     sys.stdout.buffer.write(repo_prefix + b"\n")
 
-                try:
-                    for result in results:
-                        if prefix == "line":
-                            sys.stdout.buffer.write(repo_prefix)
-                        sys.stdout.buffer.write(result)
-                    sys.stdout.flush()
-                except BrokenPipeError:
-                    devnull = os.open(os.devnull, os.O_WRONLY)
-                    os.dup2(devnull, sys.stdout.fileno())
-                    raise SystemExit(1)
+                for output, stream in zip(results, (sys.stdout, sys.stderr)):
+                    try:
+                        for result in output:
+                            if prefix == "line":
+                                stream.buffer.write(repo_prefix)
+                            stream.buffer.write(result)
+                        stream.flush()
+                    except BrokenPipeError:
+                        devnull = os.open(os.devnull, os.O_WRONLY)
+                        os.dup2(devnull, stream.fileno())
+                        raise SystemExit(1)
 
     except KeyboardInterrupt:
         print("Caught Ctrl-C, exiting.", file=sys.stderr)
