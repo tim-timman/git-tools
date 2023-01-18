@@ -6,6 +6,8 @@ import argparse
 from concurrent.futures import as_completed, ThreadPoolExecutor
 import os
 from pathlib import Path
+import pty
+import select
 import shlex
 import subprocess
 import sys
@@ -103,20 +105,43 @@ def default_command(args, git_args):
 def run_git(command: list[str], *,
             ok_returncodes: tuple[int] = (0,),
             ignore_returncodes: tuple[int] = ()) -> Optional[tuple[list[bytes], list[bytes]]]:
-    # @TODO: if we're run in a tty, attach stdout and stderr to pty's to not
-    # change behavior of program thinking it's writing to a pipe (which it is).
-    # Git stops outputting progress information to stderr for a lot of commands
-    # that we want to capture.
-    # See https://stackoverflow.com/questions/52954248/capture-output-as-a-tty-in-python
-    # Update: Git seems to think it's not a fully functional tty and asks for input
-    # hence hanging the pipe.
-    p = subprocess.run(command, capture_output=True)
+
+    masters, slaves = zip(*(pty.openpty() for _ in range(3)))
+
+    p = subprocess.Popen(command, close_fds=True, env={"TERM": os.getenv("TERM", "xterm")},
+                         stdin=slaves[0], stdout=slaves[1], stderr=slaves[2])
+    for fd in slaves:
+        os.close(fd)
+
+    results = {
+        masters[1]: bytearray(),
+        masters[2]: bytearray(),
+    }
+    readable = [masters[1], masters[2]]
+    try:
+        while readable:
+            ready, _, _ = select.select(readable, [], [])
+            for fd in ready:
+                data = os.read(fd, 512)
+                if not data:
+                    readable.remove(fd)
+                    continue
+                results[fd] += data
+    finally:
+        if p.poll() is None:
+            p.kill()
+        p.wait()
+        for fd in masters:
+            os.close(fd)
+
+    stdout, stderr = results[masters[1]], results[masters[2]]
+
     if p.returncode in ok_returncodes:
-        return p.stdout.splitlines(keepends=True), p.stderr.splitlines(keepends=True)
+        return stdout.splitlines(keepends=True), stderr.splitlines(keepends=True)
     elif p.returncode in ignore_returncodes:
         return None
     else:
-        raise GitError(p.stderr.decode())
+        raise GitError(stderr.decode())
 
 
 def main() -> int:
