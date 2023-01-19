@@ -9,10 +9,14 @@ from pathlib import Path
 import pty
 import select
 import shlex
+import signal
 import subprocess
 import sys
+import threading
 from typing import Iterator, Optional
 
+
+die = threading.Event()
 
 if sys.version_info <= (3, 11):
     print("ERROR: Requires Python 3.11 or higher", file=sys.stderr)
@@ -88,7 +92,7 @@ def grep_command(args, git_args):
     print(f"=> git grep {shlex.join(git_args)}", file=sys.stderr)
 
     def command(repo: Path):
-        return run_git(["git", "-C", shlex.quote(str(repo)), "grep", *git_args],
+        return run_git(["git", "--no-pager", "-C", shlex.quote(str(repo)), "grep", *git_args],
                        ignore_returncodes=(1,))
     return command
 
@@ -98,7 +102,7 @@ def default_command(args, git_args):
     print(f"=> git {shlex.join(git_args)}", file=sys.stderr)
 
     def command(repo: Path):
-        return run_git(["git", "-C", shlex.quote(str(repo)), *git_args])
+        return run_git(["git", "--no-pager", "-C", shlex.quote(str(repo)), *git_args])
     return command
 
 
@@ -120,6 +124,10 @@ def run_git(command: list[str], *,
     readable = [masters[1], masters[2]]
     try:
         while readable:
+            if die.is_set():
+                p.send_signal(signal.SIGINT)
+                return None
+
             ready, _, _ = select.select(readable, [], [])
             for fd in ready:
                 data = os.read(fd, 512)
@@ -207,6 +215,10 @@ def main() -> int:
                     results = future.result()
                 except GitError as e:
                     print(f"ERROR: in repo {repo}:\n{e}", file=sys.stderr)
+                    # cancel futures
+                    die.set()
+                    for f in future_to_repo:
+                        f.cancel()
                     return 1
 
                 if results is None:
