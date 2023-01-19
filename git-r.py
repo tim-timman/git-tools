@@ -18,8 +18,8 @@ from typing import Iterator, Optional
 
 die = threading.Event()
 
-if sys.version_info <= (3, 11):
-    print("ERROR: Requires Python 3.11 or higher", file=sys.stderr)
+if sys.version_info <= (3, 9):
+    print("ERROR: Requires Python 3.9 or higher", file=sys.stderr)
     raise SystemExit(1)
 
 
