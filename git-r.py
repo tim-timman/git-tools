@@ -7,6 +7,7 @@ from concurrent.futures import as_completed, ThreadPoolExecutor
 import os
 from pathlib import Path
 import pty
+import re
 import select
 import shlex
 import signal
@@ -154,9 +155,12 @@ def run_git(command: list[str], *,
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("-X", "--exclude-repo", metavar="PATTERN",  default=[],
+    parser.add_argument("-X", "--exclude-repo", metavar="PATTERN", default=[],
                         action="extend", type=str, nargs=1,
-                        help="glob pattern of repos to exclude")
+                        help="regex pattern of repos to exclude")
+    parser.add_argument("-I", "--include-repo", metavar="PATTERN", default=[],
+                        action="extend", type=str, nargs=1,
+                        help="regex pattern of repos to include")
     parser.add_argument("-C", "--cwd", type=Path, default=Path.cwd(), metavar="PATH",
                         help="change current working directory")
     parser.add_argument("--list-repos", action="store_true",
@@ -178,8 +182,17 @@ def main() -> int:
     if not args.cwd.is_absolute():
         args.cwd = args.cwd.absolute()
 
-    repos = [d for d in find_git_repos(args.cwd)
-             if not any(d.match(pattern) for pattern in args.exclude_repo)]
+    include_res = [re.compile(p) for p in args.include_repo]
+    exclude_res = [re.compile(p) for p in args.exclude_repo]
+
+    repos = []
+    for repo in find_git_repos(args.cwd):
+        repo_str = str(repo)
+        if include_res and not any(pattern.search(repo_str) for pattern in include_res):
+            continue
+        if any(pattern.search(repo_str) for pattern in exclude_res):
+            continue
+        repos.append(repo)
 
     if args.list_repos:
         for d in repos:
