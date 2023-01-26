@@ -27,7 +27,7 @@ if sys.version_info <= (3, 9):
 def is_git_repo(d: Path):
     assert d.is_dir(), "path is a directory"
 
-    cmd = ["git", "-C", shlex.quote(str(d)), "rev-parse"]
+    cmd = ["git", "-C", str(d), "rev-parse"]
     p = subprocess.run(cmd,
                        stderr=subprocess.DEVNULL,
                        stdout=subprocess.DEVNULL)
@@ -93,7 +93,7 @@ def grep_command(args, git_args):
     print(f"=> git grep {shlex.join(git_args)}", file=sys.stderr)
 
     def command(repo: Path):
-        return run_git(["git", "--no-pager", "-C", shlex.quote(str(repo)), "grep", *git_args],
+        return run_git(["git", "--no-pager", "-C", str(repo), "grep", *git_args],
                        ignore_returncodes=(1,))
     return command
 
@@ -103,7 +103,7 @@ def default_command(args, git_args):
     print(f"=> git {shlex.join(git_args)}", file=sys.stderr)
 
     def command(repo: Path):
-        return run_git(["git", "--no-pager", "-C", shlex.quote(str(repo)), *git_args])
+        return run_git(["git", "--no-pager", "-C", str(repo), *git_args])
     return command
 
 
@@ -181,6 +181,7 @@ def main() -> int:
 
     if not args.cwd.is_absolute():
         args.cwd = args.cwd.absolute()
+    args.cwd = args.cwd.resolve()
 
     include_res = [re.compile(p) for p in args.include_repo]
     exclude_res = [re.compile(p) for p in args.exclude_repo]
