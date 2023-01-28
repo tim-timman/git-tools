@@ -14,7 +14,7 @@ import signal
 import subprocess
 import sys
 import threading
-from typing import Iterator, Optional
+from typing import Optional
 
 
 die = threading.Event()
@@ -25,8 +25,6 @@ if sys.version_info <= (3, 9):
 
 
 def is_git_repo(d: Path):
-    assert d.is_dir(), "path is a directory"
-
     cmd = ["git", "-C", str(d), "rev-parse"]
     p = subprocess.run(cmd,
                        stderr=subprocess.DEVNULL,
@@ -34,15 +32,30 @@ def is_git_repo(d: Path):
     return p.returncode == 0
 
 
-def find_git_repos(parent: Path) -> Iterator[Path]:
-    assert parent.is_dir(), "path is a directory"
+def find_git_repos(parent: Path) -> list[Path]:
+    assert parent.is_dir(), f"{parent} is not a directory"
     if is_git_repo(parent):
-        yield parent
-        return
+        return [parent]
 
-    for child in parent.iterdir():
-        if child.is_dir():
-            yield from find_git_repos(child)
+    repos: list[Path] = []
+    with ThreadPoolExecutor() as ex:
+        futures_repo_map = {ex.submit(is_git_repo, d): d
+                            for d in parent.iterdir()
+                            if d.is_dir()}
+
+        while futures_repo_map:
+            for future in as_completed(list(futures_repo_map)):
+                is_repo = future.result()
+                directory = futures_repo_map.pop(future)
+                if is_repo:
+                    repos.append(directory)
+                else:
+                    futures_repo_map.update({
+                        ex.submit(is_git_repo, d): d
+                        for d in directory.iterdir()
+                        if d.is_dir()
+                    })
+    return repos
 
 
 class GitError(Exception):
