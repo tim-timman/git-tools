@@ -32,26 +32,29 @@ def is_git_repo(d: Path):
     return p.returncode == 0
 
 
-def find_git_repos(parent: Path) -> list[Path]:
+def find_git_repos(parent: Path, depth: int = 3) -> list[Path]:
     assert parent.is_dir(), f"{parent} is not a directory"
     if is_git_repo(parent):
         return [parent]
 
+    if depth < 1:
+        return []
+
     repos: list[Path] = []
     with ThreadPoolExecutor() as ex:
-        futures_repo_map = {ex.submit(is_git_repo, d): d
+        futures_repo_map = {ex.submit(is_git_repo, d): (d, depth - 1)
                             for d in parent.iterdir()
                             if d.is_dir()}
 
         while futures_repo_map:
             for future in as_completed(list(futures_repo_map)):
                 is_repo = future.result()
-                directory = futures_repo_map.pop(future)
+                directory, cur_depth = futures_repo_map.pop(future)
                 if is_repo:
                     repos.append(directory)
-                else:
+                elif cur_depth > 0:
                     futures_repo_map.update({
-                        ex.submit(is_git_repo, d): d
+                        ex.submit(is_git_repo, d): (d, cur_depth - 1)
                         for d in directory.iterdir()
                         if d.is_dir()
                     })
@@ -174,6 +177,8 @@ def main() -> int:
     parser.add_argument("-I", "--include-repo", metavar="PATTERN", default=[],
                         action="extend", type=str, nargs=1,
                         help="regex pattern of repos to include")
+    parser.add_argument("-d", "--depth", type=int, default=3,
+                        help="max recurse depth (DEFAULT: %(default)s)")
     parser.add_argument("-C", "--cwd", type=Path, default=Path.cwd(), metavar="PATH",
                         help="change current working directory")
     parser.add_argument("--list-repos", action="store_true",
@@ -196,15 +201,15 @@ def main() -> int:
         args.cwd = args.cwd.absolute()
     args.cwd = args.cwd.resolve()
 
-    include_res = [re.compile(p) for p in args.include_repo]
-    exclude_res = [re.compile(p) for p in args.exclude_repo]
+    include_patterns = [re.compile(p) for p in args.include_repo]
+    exclude_patterns = [re.compile(p) for p in args.exclude_repo]
 
     repos = []
-    for repo in find_git_repos(args.cwd):
+    for repo in find_git_repos(args.cwd, args.depth):
         repo_str = str(repo)
-        if include_res and not any(pattern.search(repo_str) for pattern in include_res):
+        if include_patterns and not any(pattern.search(repo_str) for pattern in include_patterns):
             continue
-        if any(pattern.search(repo_str) for pattern in exclude_res):
+        if any(pattern.search(repo_str) for pattern in exclude_patterns):
             continue
         repos.append(repo)
 
