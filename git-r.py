@@ -169,13 +169,20 @@ def run_git(command: list[str], *,
         raise GitError(stderr.decode())
 
 
+def re_argparse_type(s: str) -> re.Pattern:
+    try:
+        return re.compile(s)
+    except re.error:
+        raise argparse.ArgumentTypeError("pattern must be valid regex") from None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("-X", "--exclude-repo", metavar="PATTERN", default=[],
-                        action="extend", type=str, nargs=1,
+    parser.add_argument("-X", "--exclude-repo", metavar="PATTERN", default=[], nargs=1,
+                        action="extend", type=re_argparse_type, dest="exclude_patterns",
                         help="regex pattern of repos to exclude")
-    parser.add_argument("-I", "--include-repo", metavar="PATTERN", default=[],
-                        action="extend", type=str, nargs=1,
+    parser.add_argument("-I", "--include-repo", metavar="PATTERN", default=[], nargs=1,
+                        action="extend", type=re_argparse_type, dest="include_patterns",
                         help="regex pattern of repos to include")
     parser.add_argument("-d", "--depth", type=int, default=3,
                         help="max recurse depth (DEFAULT: %(default)s)")
@@ -201,8 +208,8 @@ def main() -> int:
         args.cwd = args.cwd.absolute()
     args.cwd = args.cwd.resolve()
 
-    include_patterns = [re.compile(p) for p in args.include_repo]
-    exclude_patterns = [re.compile(p) for p in args.exclude_repo]
+    include_patterns = args.include_patterns
+    exclude_patterns = args.exclude_patterns
 
     repos = []
     for repo in find_git_repos(args.cwd, args.depth):
