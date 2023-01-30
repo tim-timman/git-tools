@@ -16,12 +16,16 @@ Add as git alias:
 git config --global alias.rgrep "\!python3.11 '$(pwd)/git-r.py'"
 ```
 
+Or (maybe better) symlink it and run it as a script `gir`:
+```shell
+ln -s /usr/local/bin/gir "$(pwd)/git-r.py"
+```
+
 Usage:
 
 ```
-$ git r -h
-'r' is aliased to '!python3.11 '/Users/tim/Projects/personal/git-tools/git-r.py''
-usage: git-r.py [-h] [-X PATTERN] [--list-repos] [--prefix {repo,line,no}] {grep,--} ...
+$ gir --help
+usage: gir [-h] [-X PATTERN] [-I PATTERN] [-d DEPTH] [-C PATH] [--list-repos] [--prefix {repo,line,no}] {grep,--} ...
 
 positional arguments:
   {grep,--}
@@ -29,7 +33,12 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
   -X PATTERN, --exclude-repo PATTERN
-                        glob pattern of repos to exclude
+                        regex pattern of repos to exclude
+  -I PATTERN, --include-repo PATTERN
+                        regex pattern of repos to include
+  -d DEPTH, --depth DEPTH
+                        max recurse depth (DEFAULT: 3)
+  -C PATH, --cwd PATH   change current working directory
   --list-repos          just list repos and exit (for piping)
   --prefix {repo,line,no}
                         prefix git output with repo path (default changes with command)
@@ -38,7 +47,7 @@ options:
 Usage `git r grep':
 
 ```
-$ git r grep -h
+$ gir grep --help
 usage: git-r.py grep [-h] [-x PATTERN] [--no-defaults] [--] [git grep args ...]
 
 options:
@@ -51,5 +60,5 @@ options:
 Run arbitrary git command (e.g. `git fetch`):
 
 ```
-git r -- fetch
+gir -- fetch
 ```
